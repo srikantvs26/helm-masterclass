@@ -29,17 +29,29 @@ helm search repo <KEY-WORD>
 helm search repo nginx
 helm search repo apache
 helm search repo wildfly
+
+Search all versions of a particular helm chart
+
+➜  rbac helm search repo nginx --version 25.1.14
+NAME         	CHART VERSION	APP VERSION	DESCRIPTION
+bitnami/nginx	25.1.14      	1.31.6     	NGINX Open Source is a web server that can be a...
+➜  rbac helm search repo nginx --versions
+
 ```
 
 ## Step-03: Install Helm Chart
 - Installs the Helm Chart
 ```t
-# Update Helm Repo
-helm repo update  # Make sure we get the latest list of charts
+# Update Helm Repo, for the repos present in your local
+helm repo update  # Make sure we get the latest list of charts in your local
 
-# Install Helm Chart
+# Install Helm Chart latest
 helm install <RELEASE-NAME> <repo_name_in_your_local_desktop/chart_name>
 helm install mynginx mybitnami/nginx
+
+# Install a particular version
+helm install my-nginx bitnami/nginx --version 25.1.14
+
 ```
 
 ## Step-04: List Helm Releases
