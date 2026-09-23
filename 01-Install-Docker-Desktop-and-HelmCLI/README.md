@@ -53,9 +53,20 @@ C:\Program Files\Docker\Docker\Resources\bin
 ```t
 # Verify if kubectl installed (Docker desktop should install kubectl automatically)
 which kubectl
+```
 
+```t
 # Verify kubectl version
-kubectl version 
+kubectl version
+# If you see this Warning: version difference between client (1.35) and server (1.37) exceeds the supported minor version skew of +/-1, We need to update our kubectl
+
+eg. in MACOS
+
+brew update
+brew upgrade kubernetes-cli
+
+```
+```t 
 kubectl version --short
 kubectl version --client --output=yaml
 
