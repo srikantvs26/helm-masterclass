@@ -1317,7 +1317,7 @@ This is the central command of this lesson.
 helm get values <RELEASE-NAME>
 ```
 
-Shows values associated with a release.
+Shows USER-SUPPLIED VALUES. the ones you passed brother using your extra values.yaml, --set etc.
 
 Use:
 
