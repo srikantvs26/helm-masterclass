@@ -1,686 +1,1522 @@
-# Helm Upgrade with `--set` Option
+# Helm Upgrade with `--set`
 
 ## Step-01: Introduction
 
-In this demo, we will upgrade an existing **WordPress Helm release** using the `helm upgrade` command.
+In this lab, we will deploy **Grafana** using Helm and then upgrade the existing Helm release by changing a chart value with the `--set` option.
 
-We will specifically use the `--set` option to override the Docker image tag during the upgrade:
-
-```bash
-helm upgrade wordpress helmforge/wordpress --set "image.tag=7.0.2-apache"
-```
-
-### Helm commands used in this demo
-
-* `helm repo`
-* `helm search repo`
-* `helm install`
-* `helm upgrade`
-* `helm list`
-* `helm history`
-* `helm status`
-* `helm uninstall`
-
-### What we are learning
-
-The important idea in this demo is:
+The primary goal is to understand:
 
 ```text
-Existing Helm Release
-        |
-        | helm upgrade
-        | --set image.tag=<new-tag>
-        v
-Helm renders the chart again
-        |
-        v
-Kubernetes resources are updated
-        |
-        v
-WordPress runs with the new image
+Helm Chart
+    ↓
+Chart Values
+    ↓
+--set override
+    ↓
+Helm renders templates
+    ↓
+Kubernetes manifests
+    ↓
+Helm Release
+    ↓
+Kubernetes resources
+    ↓
+Grafana
+    ↓
+Web UI
 ```
 
-`--set` allows us to override chart values directly from the command line. Helm gives these command-line overrides higher priority than values coming from the chart's default values.
+We will use Grafana because it gives us a real Web UI where we can observe the application after making configuration changes.
+
+### Helm commands covered
+
+```text
+helm repo
+helm search repo
+helm show
+helm install
+helm template
+helm upgrade
+helm list
+helm history
+helm status
+helm get values
+helm get manifest
+helm rollback
+helm uninstall
+```
+
+We will also learn how Helm works with:
+
+* OCI registries
+* Traditional HTTP Helm chart repositories
+* `values.yaml`
+* `--set`
+* Release revisions
+* Upgrade and rollback
 
 ---
 
-# Step-02: Add and Explore the Helm Repository
+# Step-02: Helm Chart Distribution
 
-## Step-02-01: Add the Helm Repository
+Helm charts can be distributed in more than one way.
 
-Add the Helm repository that contains the WordPress chart:
+Two important mechanisms are:
+
+1. **OCI-based registries**
+2. **Traditional HTTP Helm chart repositories**
+
+---
+
+## Step-02-01: OCI Registry
+
+Helm supports storing and distributing charts through OCI-compliant registries.
+
+OCI support became generally available in Helm 3.8.0 and is enabled by default. Helm supports commands such as `helm install`, `helm upgrade`, `helm show`, `helm template`, `helm pull`, and `helm push` with OCI chart references. ([helm.sh](https://docs.helm.sh/docs/v3/topics/registries/?utm_source=chatgpt.com))
+
+An OCI chart reference looks like:
+
+```text
+oci://registry.example.com/path/chart
+```
+
+For example:
 
 ```bash
-# Add Helm repository
-helm repo add helmforge https://repo.helmforge.dev
+helm install <RELEASE-NAME> \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
+```
 
-# Update local repository information
+The important difference is that we **do not need `helm repo add`** for an OCI registry.
+
+Compare:
+
+```text
+Traditional repository:
+
+helm repo add
+      ↓
+repository metadata
+      ↓
+helm search repo
+      ↓
+chart
+```
+
+with:
+
+```text
+OCI registry:
+
+oci://...
+      ↓
+Helm accesses the chart directly
+```
+
+Helm's official documentation describes OCI registries as a supported mechanism for storing and sharing Helm charts. ([helm.sh](https://docs.helm.sh/docs/v3/topics/registries/?utm_source=chatgpt.com))
+
+### Versioned OCI installation
+
+It is good practice to specify the chart version when reproducibility matters:
+
+```bash
+helm install <RELEASE-NAME> \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  --version <CHART-VERSION>
+```
+
+An OCI chart version is represented by the OCI tag.
+
+Helm requires OCI chart references to use the chart's name as the basename and the chart version as the tag. ([helm.sh](https://docs.helm.sh/docs/v3/topics/registries/?utm_source=chatgpt.com))
+
+---
+
+# Step-03: Traditional HTTP Helm Repository
+
+The traditional Helm repository mechanism uses an HTTP server containing an `index.yaml` file and packaged charts.
+
+Grafana's official documentation currently provides this installation method for the Grafana Helm chart. ([grafana.com](https://grafana.com/docs/grafana/latest/setup-grafana/installation/helm/?utm_source=chatgpt.com))
+
+Add the Grafana repository:
+
+```bash
+helm repo add grafana-community \
+  https://grafana-community.github.io/helm-charts
+```
+
+Update the local repository metadata:
+
+```bash
 helm repo update
 ```
 
-### Verify the repository
+Verify:
 
 ```bash
 helm repo list
 ```
 
-You should see the repository:
-
-```text
-NAME        URL
-helmforge   https://repo.helmforge.dev
-```
-
-`helm repo add` registers a chart repository with your local Helm client, while `helm repo update` refreshes the locally cached information about charts available from configured repositories.
-
----
-
-## Step-02-02: Search for the WordPress Chart
-
-Once the repository has been added, search the repositories configured on your machine:
+Search for the Grafana chart:
 
 ```bash
-helm search repo wordpress
+helm search repo grafana-community/grafana
 ```
 
-You should see the WordPress chart:
+The important distinction is:
 
 ```text
-helmforge/wordpress
+helm search repo
+        ↓
+Searches repositories registered with Helm
 ```
-
-### Important distinction
-
-There are two commonly used Helm search commands:
-
-```bash
-helm search repo wordpress
-```
-
-Searches the **repositories already added to your local Helm client**.
 
 Whereas:
 
 ```bash
-helm search hub wordpress
+helm search hub grafana
 ```
 
-searches **Artifact Hub** for publicly available charts.
+searches Artifact Hub.
 
 ---
 
-# Step-03: Inspect the WordPress Chart
+# Step-04: OCI vs HTTP Helm Repository
 
-Before installing a chart, it is useful to understand the values that the chart exposes.
+For this lab, understand the difference rather than memorizing two installation commands.
 
-### Display the chart's default values
-
-```bash
-helm show values helmforge/wordpress
-```
-
-This shows the chart's `values.yaml`.
-
-Look for the image configuration, for example:
-
-```yaml
-image:
-  repository: ...
-  tag: ...
-```
-
-The exact structure depends on the chart version.
-
-### Inspect a specific chart version
+### OCI
 
 ```bash
-helm show values helmforge/wordpress --version <CHART-VERSION>
+helm install grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
+```
+
+No `helm repo add` is required.
+
+### HTTP chart repository
+
+```bash
+helm repo add grafana-community \
+  https://grafana-community.github.io/helm-charts
+
+helm repo update
+
+helm install grafana \
+  grafana-community/grafana
+```
+
+### Mental model
+
+```text
+OCI
+│
+└── Registry directly stores/distributes chart artifacts
+
+HTTP Chart Repository
+│
+└── HTTP server
+      ├── index.yaml
+      └── packaged charts
+```
+
+Both are valid ways of obtaining Helm charts.
+
+For this lab, we will primarily use **OCI**, because it gives us experience with the modern OCI-based distribution model.
+
+---
+
+# Step-05: Inspect the Grafana Chart
+
+Before installing a chart, understand what you are installing.
+
+For the OCI chart:
+
+```bash
+helm show chart \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
+```
+
+View the chart's default values:
+
+```bash
+helm show values \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
+```
+
+If you want a specific chart version:
+
+```bash
+helm show values \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  --version <CHART-VERSION>
+```
+
+### Why `helm show values` matters
+
+The chart's `values.yaml` defines the configuration interface exposed by the chart.
+
+For example, Grafana's chart exposes configuration for things such as:
+
+```text
+Image
+Persistence
+Service
+Ingress
+Resources
+Admin credentials
+Plugins
+Grafana configuration
+```
+
+The exact values should always be checked against the chart version you are using.
+
+Do not assume that a value exists merely because another chart uses the same name.
+
+---
+
+# Step-06: Understand Helm Values
+
+A chart has default values.
+
+Conceptually:
+
+```text
+Chart
+ │
+ └── values.yaml
+       │
+       ├── image
+       ├── service
+       ├── persistence
+       └── ...
+```
+
+We can override those defaults using:
+
+### Values file
+
+```bash
+-f my-values.yaml
+```
+
+or:
+
+### Command-line value
+
+```bash
+--set key=value
 ```
 
 For example:
 
 ```bash
-helm show values helmforge/wordpress --version 3.0.3
+--set image.tag=<TAG>
 ```
 
-### Why this matters
+Conceptually:
 
-The important Helm concept is:
-
-```text
-Chart's values.yaml
-        +
-Your overrides
-        |
-        v
-Final values used by Helm
-        |
-        v
-Templates
-        |
-        v
-Kubernetes manifests
+```yaml
+image:
+  tag: <TAG>
 ```
 
-We will override the image tag using `--set`.
+The important point:
+
+> `--set` does not modify the chart's `values.yaml`.
+
+It supplies an override to Helm when Helm processes the chart.
 
 ---
 
-# Step-04: Install WordPress
+# Step-07: Render the Chart Before Installing
 
-Install the WordPress chart:
+Before installing anything, render the chart locally:
 
 ```bash
-helm install wordpress helmforge/wordpress
+helm template grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
+```
+
+Save the result:
+
+```bash
+helm template grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  > rendered.yaml
+```
+
+Now inspect:
+
+```bash
+less rendered.yaml
+```
+
+This is one of the most important Helm learning exercises.
+
+You are seeing the Kubernetes manifests generated by Helm.
+
+The relationship is:
+
+```text
+Chart
+  +
+Values
+  ↓
+Helm template engine
+  ↓
+Rendered Kubernetes YAML
+```
+
+`helm template` renders locally without installing the release into the Kubernetes cluster.
+
+---
+
+# Step-08: Create a Namespace
+
+Grafana's official documentation recommends installing Grafana into a dedicated namespace rather than relying on the default namespace. ([grafana.com](https://grafana.com/docs/grafana/latest/setup-grafana/installation/helm/?utm_source=chatgpt.com))
+
+Create:
+
+```bash
+kubectl create namespace monitoring
+```
+
+Verify:
+
+```bash
+kubectl get namespace monitoring
+```
+
+---
+
+# Step-09: Install Grafana from the OCI Registry
+
+Install Grafana:
+
+```bash
+helm install grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  --namespace monitoring \
+  --create-namespace \
+  --wait
 ```
 
 Here:
 
 ```text
-wordpress
-    |
-    +-- Release name
+grafana
+   ↑
+Release name
 
-helmforge/wordpress
-    |
-    +-- Chart reference
+oci://ghcr.io/grafana-community/helm-charts/grafana
+   ↑
+OCI chart reference
+
+--namespace monitoring
+   ↑
+Kubernetes namespace
 ```
 
-The release name is **`wordpress`**.
+The release name is:
 
-Check the installed release:
+```text
+grafana
+```
+
+The chart is:
+
+```text
+oci://ghcr.io/grafana-community/helm-charts/grafana
+```
+
+---
+
+# Step-10: Verify the Helm Release
+
+List releases:
 
 ```bash
-helm list
+helm list -n monitoring
 ```
 
 You should see something similar to:
 
 ```text
-NAME       STATUS     CHART
-wordpress  deployed   wordpress-<version>
+NAME      NAMESPACE    REVISION    STATUS
+grafana   monitoring   1           deployed
 ```
 
----
-
-# Step-05: List Kubernetes Resources and Access WordPress
-
-### List Pods
-
-```bash
-kubectl get pods
-```
-
-### List Services
-
-```bash
-kubectl get svc
-```
-
-You should find the WordPress Service.
-
-For example:
-
-```text
-NAME        TYPE        CLUSTER-IP      PORT(S)
-wordpress   ClusterIP   10.x.x.x        80/TCP
-```
-
-### Access WordPress using port-forward
-
-If the Service exposes port `80`:
-
-```bash
-kubectl port-forward svc/wordpress 8080:80
-```
-
-Then open:
-
-```text
-http://localhost:8080
-```
-
-### What is happening?
-
-`kubectl port-forward` creates a temporary connection:
-
-```text
-Browser
-   |
-   | localhost:8080
-   v
-kubectl port-forward
-   |
-   | Kubernetes connection
-   v
-wordpress Service :80
-   |
-   v
-WordPress Pod
-```
-
-This avoids requiring a NodePort or external LoadBalancer just to access the application locally.
-
----
-
-# Step-06: Upgrade WordPress Using `--set`
-
-Now we will change the WordPress container image tag.
-
-First, identify the image configuration exposed by the chart:
-
-```bash
-helm show values helmforge/wordpress
-```
-
-Suppose the chart contains:
-
-```yaml
-image:
-  repository: ...
-  tag: 6.0.0-apache
-```
-
-We can override only the tag:
-
-```bash
-helm upgrade wordpress helmforge/wordpress \
-  --set "image.tag=7.0.2-apache"
-```
-
-### Understand the command
-
-```text
-helm upgrade
-    |
-    +-- wordpress
-    |      |
-    |      +-- Existing release name
-    |
-    +-- helmforge/wordpress
-           |
-           +-- Chart
-
---set "image.tag=7.0.2-apache"
-           |
-           +-- Override chart value
-```
-
-The important point is that **we are not editing the chart's `values.yaml`**.
-
-We are saying:
-
-> "For this upgrade, use `7.0.2-apache` for the `image.tag` value."
-
-Helm supports `--set` specifically for supplying value overrides from the command line.
-
----
-
-# Step-07: Observe the Helm Revision
-
-After the upgrade:
-
-```bash
-helm list
-```
-
-The release should now have a newer revision.
-
-You can inspect the revision history:
-
-```bash
-helm history wordpress
-```
-
-You should see something similar to:
-
-```text
-REVISION   STATUS
-1          superseded
-2          deployed
-```
-
-### Important concept: Revision
-
-A Helm **revision** represents a version of the release's deployment history.
-
-For example:
+The first installation creates:
 
 ```text
 Revision 1
-    |
-    | helm install
-    v
-WordPress image = old version
-
-Revision 2
-    |
-    | helm upgrade --set image.tag=7.0.2-apache
-    v
-WordPress image = 7.0.2-apache
-
-Revision 3
-    |
-    | another helm upgrade
-    v
-WordPress image = newer version
 ```
 
-`helm history` displays the historical revisions of a release.
+### Important
+
+This is a **Helm release revision**.
+
+It is not the Grafana application version.
+
+For example:
+
+```text
+Helm revision = 1
+Grafana app version = 12.x
+```
+
+These represent different things.
 
 ---
 
-# Step-08: Verify the WordPress Upgrade
+# Step-11: Verify Kubernetes Resources
 
-Check the Pods:
+List the resources:
 
 ```bash
-kubectl get pods
+kubectl get all -n monitoring
 ```
 
-You can also inspect the image currently used by the Pod:
+Check Pods:
+
+```bash
+kubectl get pods -n monitoring
+```
+
+Check Services:
+
+```bash
+kubectl get svc -n monitoring
+```
+
+Check the Deployment:
+
+```bash
+kubectl get deployment -n monitoring
+```
+
+---
+
+# Step-12: Access Grafana
+
+Grafana's official documentation provides instructions for obtaining the generated admin password and accessing Grafana through port forwarding. ([grafana.com](https://grafana.com/docs/grafana/latest/setup-grafana/installation/helm/?utm_source=chatgpt.com))
+
+First inspect the chart notes:
+
+```bash
+helm get notes grafana -n monitoring
+```
+
+The notes provide chart-specific instructions.
+
+Get the generated admin password:
+
+```bash
+kubectl get secret \
+  --namespace monitoring \
+  grafana \
+  -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```
+
+The username is:
+
+```text
+admin
+```
+
+Now identify the Grafana Pod:
+
+```bash
+kubectl get pods -n monitoring
+```
+
+You can port-forward the Service directly:
+
+```bash
+kubectl port-forward \
+  -n monitoring \
+  svc/grafana \
+  3000:80
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Log in with:
+
+```text
+Username: admin
+Password: <decoded password>
+```
+
+---
+
+# Step-13: Inspect the Installed Release
+
+Now we start investigating what Helm actually installed.
+
+### Current status
+
+```bash
+helm status grafana -n monitoring
+```
+
+### Values
+
+```bash
+helm get values grafana -n monitoring
+```
+
+### All computed values
+
+```bash
+helm get values grafana \
+  --namespace monitoring \
+  --all
+```
+
+### Kubernetes manifests
+
+```bash
+helm get manifest grafana -n monitoring
+```
+
+### Chart notes
+
+```bash
+helm get notes grafana -n monitoring
+```
+
+These commands let us inspect different parts of the Helm release.
+
+---
+
+# Step-14: Find the Image Configuration
+
+Before changing the image tag, inspect the chart's values:
+
+```bash
+helm show values \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
+```
+
+Find the relevant image configuration.
+
+For example, depending on the chart version, you may see an image section containing a tag.
+
+Do **not** blindly assume a particular key.
+
+The chart's `values.yaml` is the source of truth for the values exposed by that chart version.
+
+---
+
+# Step-15: Perform a Helm Upgrade Using `--set`
+
+Suppose the chart exposes:
+
+```yaml
+image:
+  tag: <CURRENT-TAG>
+```
+
+We can override the tag:
+
+```bash
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  --namespace monitoring \
+  --set "image.tag=<NEW-TAG>" \
+  --wait
+```
+
+### What does `--set` mean?
+
+It means:
+
+> Override this chart value for this Helm operation.
+
+It does **not** modify the chart.
+
+It does **not** modify the original `values.yaml`.
+
+It supplies a value to Helm while Helm calculates the configuration used to render the chart.
+
+---
+
+# Step-16: What Happens During `helm upgrade`?
+
+This is the most important conceptual part of this lab.
+
+Suppose the current release is:
+
+```text
+Revision 1
+```
+
+We execute:
+
+```bash
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  --namespace monitoring \
+  --set "image.tag=<NEW-TAG>"
+```
+
+Conceptually:
+
+```text
+Existing Helm Release
+        │
+        ├── Chart
+        │
+        └── Existing configuration
+                 │
+                 │
+           New --set value
+                 │
+                 ↓
+          Computed values
+                 │
+                 ↓
+          Helm templates
+                 │
+                 ↓
+       Rendered Kubernetes YAML
+                 │
+                 ↓
+          Kubernetes API
+                 │
+                 ↓
+      Kubernetes reconciles changes
+                 │
+                 ↓
+          Grafana workload
+                 │
+                 ↓
+             Revision 2
+```
+
+The important thing is:
+
+> **Helm does not simply change a Docker image string inside a Pod.**
+
+Helm renders the chart again using the new configuration and performs the upgrade of the release.
+
+Kubernetes then handles the resulting workload changes.
+
+---
+
+# Step-17: Verify the New Revision
+
+Run:
+
+```bash
+helm list -n monitoring
+```
+
+The revision should now be:
+
+```text
+2
+```
+
+Again:
+
+```text
+Revision 2 ≠ Grafana version 2
+```
+
+It means:
+
+> This is the second revision of the `grafana` Helm release.
+
+---
+
+# Step-18: Verify the Actual Kubernetes Image
+
+Do not rely only on the Grafana UI.
+
+First:
+
+```bash
+kubectl get pods -n monitoring
+```
+
+Then:
 
 ```bash
 kubectl get pod <POD-NAME> \
+  -n monitoring \
   -o jsonpath='{.spec.containers[*].image}'
 ```
-
-You should see the new image tag.
 
 You can also inspect the Deployment:
 
 ```bash
-kubectl get deployment wordpress \
+kubectl get deployment -n monitoring
+```
+
+Then:
+
+```bash
+kubectl get deployment <DEPLOYMENT-NAME> \
+  -n monitoring \
   -o jsonpath='{.spec.template.spec.containers[*].image}'
 ```
 
-### Access WordPress again
-
-If the port-forward is still running:
-
-```text
-http://localhost:8080
-```
-
-The application should now be running with the upgraded image.
+This gives you direct evidence that the value ultimately affected the Kubernetes workload.
 
 ---
 
-# Step-09: Perform More WordPress Upgrades
+# Step-19: Helm History
 
-For practice, perform additional upgrades by choosing valid image tags supported by the chart/application.
+View the release history:
+
+```bash
+helm history grafana -n monitoring
+```
+
+You should see something similar to:
+
+```text
+REVISION    STATUS
+1           superseded
+2           deployed
+```
+
+The history answers:
+
+```text
+What revisions exist?
+
+What was deployed?
+
+Which revision is currently deployed?
+
+What chart/app version was associated with each revision?
+```
+
+Helm's `helm history` command retrieves historical revisions for a release. ([helm.sh](https://docs.helm.sh/docs/helm/helm_history/?utm_source=chatgpt.com))
+
+---
+
+# Step-20: Perform Another Upgrade
+
+Perform another change using a valid value from the chart's current `values.yaml`.
 
 For example:
 
 ```bash
-helm upgrade wordpress helmforge/wordpress \
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  --namespace monitoring \
+  --set "image.tag=<ANOTHER-TAG>" \
+  --wait
+```
+
+Then:
+
+```bash
+helm history grafana -n monitoring
+```
+
+You should now see:
+
+```text
+Revision 1
+Revision 2
+Revision 3
+```
+
+---
+
+# Step-21: `--set` vs `-f values.yaml`
+
+This distinction is fundamental.
+
+Suppose we create:
+
+```yaml
+# my-values.yaml
+
+image:
+  tag: <VERSION-A>
+```
+
+We can upgrade with:
+
+```bash
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  -n monitoring \
+  -f my-values.yaml
+```
+
+Or:
+
+```bash
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  -n monitoring \
+  -f my-values.yaml \
+  --set "image.tag=<VERSION-B>"
+```
+
+When both specify the same value, the command-line `--set` value has higher precedence than the value supplied through the file. ([helm.sh](https://docs.helm.sh/docs/helm/helm_upgrade/?utm_source=chatgpt.com))
+
+Conceptually:
+
+```text
+Chart defaults
+      ↓
+values file
+      ↓
+--set
+      ↓
+Final value
+```
+
+---
+
+# Step-22: Multiple `--set` Values
+
+You can specify multiple values:
+
+```bash
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  -n monitoring \
+  --set "image.tag=<VERSION>" \
+  --set "service.type=ClusterIP"
+```
+
+You can also provide multiple assignments:
+
+```bash
+--set "image.tag=<VERSION>,service.type=ClusterIP"
+```
+
+If the same key is specified multiple times, the right-most value takes precedence. ([helm.sh](https://docs.helm.sh/docs/helm/helm_upgrade/?utm_source=chatgpt.com))
+
+Example:
+
+```bash
+--set image.tag=1.0 \
+--set image.tag=2.0
+```
+
+results in:
+
+```yaml
+image:
+  tag: 2.0
+```
+
+---
+
+# Step-23: `--reuse-values`
+
+Helm also provides:
+
+```bash
+--reuse-values
+```
+
+This tells Helm to reuse the existing release's values and merge new values supplied through `--set` or `-f` into them. ([helm.sh](https://docs.helm.sh/docs/helm/helm_upgrade/?utm_source=chatgpt.com))
+
+For example:
+
+```bash
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  -n monitoring \
+  --reuse-values \
   --set "image.tag=<NEW-TAG>"
 ```
 
-Then verify:
+Conceptually:
 
-```bash
-helm history wordpress
+```text
+Previous release values
+        +
+new --set values
+        ↓
+new computed values
 ```
 
-and:
+This is an important option to understand, but don't use it blindly in production. You should understand exactly which previous values you are intentionally carrying forward.
 
-```bash
-kubectl get pods
+---
+
+# Step-24: Helm Rollback
+
+Suppose the release history looks like:
+
+```text
+Revision 1 → Working
+Revision 2 → Working
+Revision 3 → Problem
 ```
 
-You should see the Helm revision increasing:
+Inspect the history:
+
+```bash
+helm history grafana -n monitoring
+```
+
+Then roll back to revision 2:
+
+```bash
+helm rollback grafana 2 -n monitoring
+```
+
+Verify:
+
+```bash
+helm history grafana -n monitoring
+```
+
+You will now have another revision.
+
+For example:
 
 ```text
 Revision 1 → Initial installation
 Revision 2 → First upgrade
-Revision 3 → Second upgrade
-Revision 4 → Third upgrade
+Revision 3 → Bad upgrade
+Revision 4 → Rollback to revision 2
 ```
 
-This is a good way to understand that **each successful `helm upgrade` creates a new release revision**.
+### Critical concept
+
+Rollback does **not** make revision 2 become the current revision.
+
+It creates a **new revision** representing the rollback operation.
 
 ---
 
-# Step-10: Helm History
+# Step-25: Helm Status
 
-`helm history` displays the historical revisions of a release.
+Check the current release:
 
 ```bash
-helm history wordpress
+helm status grafana -n monitoring
+```
+
+You can also inspect a particular revision:
+
+```bash
+helm status grafana \
+  --namespace monitoring \
+  --revision 2
+```
+
+Think of the commands this way:
+
+```text
+helm history
+    ↓
+"What revisions exist?"
+
+helm status
+    ↓
+"What is the release's status?"
+
+helm get values
+    ↓
+"What values are associated with it?"
+
+helm get manifest
+    ↓
+"What manifests are stored for it?"
+```
+
+---
+
+# Step-26: Uninstall the Grafana Release
+
+When you are finished:
+
+```bash
+helm uninstall grafana -n monitoring
+```
+
+This removes the Helm release and the Kubernetes resources associated with that release.
+
+Helm's official documentation uses `helm uninstall` for removing a release. By default, the release history is also removed; `--keep-history` can be used when you want to retain the release history after uninstalling. ([helm.sh](https://helm.sh/docs/intro/quickstart/?utm_source=chatgpt.com))
+
+Verify:
+
+```bash
+helm list -n monitoring
+```
+
+Then:
+
+```bash
+kubectl get all -n monitoring
+```
+
+If this namespace was created only for this lab:
+
+```bash
+kubectl delete namespace monitoring
+```
+
+### Important: Helm release vs persistent data
+
+Do not assume that:
+
+```bash
+helm uninstall grafana
+```
+
+always means:
+
+> "Every piece of application data is permanently deleted."
+
+Persistent resources such as PVCs require deliberate consideration.
+
+For a learning environment where you want a completely clean lab, inspect:
+
+```bash
+kubectl get pvc -n monitoring
+```
+
+before deleting the namespace or storage.
+
+---
+
+# Step-27: Complete Helm Command Reference
+
+These are the commands you should be comfortable with after this lab.
+
+## 1. `helm repo add`
+
+```bash
+helm repo add <NAME> <URL>
+```
+
+Adds a traditional HTTP Helm chart repository to your local Helm configuration.
+
+Example:
+
+```bash
+helm repo add grafana-community \
+  https://grafana-community.github.io/helm-charts
+```
+
+Use this for traditional chart repositories.
+
+---
+
+## 2. `helm repo update`
+
+```bash
+helm repo update
+```
+
+Downloads the latest repository metadata for repositories you've added.
+
+Think:
+
+```text
+Remote repository
+       ↓
+helm repo update
+       ↓
+Local repository metadata
+```
+
+---
+
+## 3. `helm repo list`
+
+```bash
+helm repo list
+```
+
+Lists traditional Helm repositories configured on your local machine.
+
+Important:
+
+> OCI registries don't require `helm repo add`, so they don't appear here merely because you've installed a chart from an OCI registry.
+
+---
+
+## 4. `helm search repo`
+
+```bash
+helm search repo <KEYWORD>
+```
+
+Searches charts in repositories you've added locally.
+
+Example:
+
+```bash
+helm search repo grafana
+```
+
+---
+
+## 5. `helm search hub`
+
+```bash
+helm search hub <KEYWORD>
+```
+
+Searches Artifact Hub.
+
+This is a **chart discovery** mechanism, not the same thing as searching your locally added repositories.
+
+---
+
+## 6. `helm show chart`
+
+```bash
+helm show chart <CHART>
+```
+
+Shows chart metadata.
+
+Useful for understanding:
+
+```text
+Chart name
+Chart version
+Application version
+Description
 ```
 
 Example:
 
-```text
-REVISION   UPDATED                  STATUS       CHART
-1          ...                      superseded   wordpress-...
-2          ...                      superseded   wordpress-...
-3          ...                      deployed     wordpress-...
-```
-
-### Why is this useful?
-
-It allows you to answer questions such as:
-
-* What happened to this release?
-* How many upgrades have occurred?
-* Which revision is currently deployed?
-* Which revision was deployed before the current one?
-* What chart version was used for each revision?
-
-You can also limit the number of revisions displayed:
-
 ```bash
-helm history wordpress --max 5
+helm show chart \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
 ```
 
 ---
 
-# Step-11: Helm Status
-
-`helm status` shows the current status of a release, including its state, revision, namespace, description, resources, and chart-provided notes.
+## 7. `helm show values`
 
 ```bash
-helm status wordpress
+helm show values <CHART>
 ```
 
-### Show the release description
+Shows the chart's default `values.yaml`.
 
-```bash
-helm status wordpress --show-desc
-```
-
-### Show resources belonging to the release
-
-```bash
-helm status wordpress --show-resources
-```
-
-### Show a specific revision
-
-```bash
-helm status wordpress --revision 2
-```
-
-For example:
-
-```bash
-helm status wordpress --revision 2
-```
-
-This lets you inspect the status information associated with revision 2.
+This is one of the most important commands when learning or configuring a chart.
 
 ---
 
-# Step-12: Inspect the Values Used by the Release
-
-An extremely useful command when learning Helm is:
+## 8. `helm template`
 
 ```bash
-helm get values wordpress
+helm template <RELEASE-NAME> <CHART>
 ```
 
-This shows the values that were supplied for the release.
+Renders the chart locally.
 
-To see all computed values, including chart defaults:
+It does **not** install the release.
+
+Think:
+
+> "Show me the Kubernetes YAML Helm would generate."
+
+Example:
 
 ```bash
-helm get values wordpress --all
+helm template grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana
 ```
 
-This is useful for understanding the difference between:
+---
+
+## 9. `helm install`
+
+```bash
+helm install <RELEASE-NAME> <CHART>
+```
+
+Creates a new Helm release.
+
+Example:
+
+```bash
+helm install grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  -n monitoring \
+  --create-namespace
+```
+
+This is where:
 
 ```text
-Chart defaults
-      +
-User-supplied values
-      +
---set overrides
-      |
-      v
-Computed values
+Chart + Values
+      ↓
+New Helm Release
 ```
 
 ---
 
-# Step-13: Inspect the Kubernetes Manifests Generated by Helm
-
-You can inspect the manifests stored for the release:
-
-```bash
-helm get manifest wordpress
-```
-
-This is one of the most useful commands for understanding Helm.
-
-The relationship becomes:
-
-```text
-values.yaml
-     +
---set image.tag=...
-     |
-     v
-Helm template rendering
-     |
-     v
-Kubernetes YAML
-     |
-     v
-Kubernetes API Server
-     |
-     v
-Pods / Services / Deployments / etc.
-```
-
-This lets you connect the **Helm values** you change with the **actual Kubernetes resources** created or updated by Helm.
-
----
-
-# Step-14: Uninstall the WordPress Release
-
-When finished with the demo:
-
-```bash
-helm uninstall wordpress
-```
-
-This removes the Helm release and the Kubernetes resources managed by that release.
-
-Verify:
+## 10. `helm list`
 
 ```bash
 helm list
 ```
 
-and:
+Lists Helm releases.
+
+For a namespace:
 
 ```bash
-kubectl get pods
+helm list -n monitoring
+```
+
+It commonly shows:
+
+```text
+NAME
+NAMESPACE
+REVISION
+STATUS
+CHART
+APP VERSION
 ```
 
 ---
 
-# Key Takeaways
-
-### 1. `helm install` creates the initial release
+## 11. `helm upgrade`
 
 ```bash
-helm install wordpress helmforge/wordpress
+helm upgrade <RELEASE-NAME> <CHART>
 ```
 
-This creates **revision 1**.
+Upgrades an existing release using a chart and new configuration.
 
-### 2. `helm upgrade` changes an existing release
+Example:
 
 ```bash
-helm upgrade wordpress helmforge/wordpress \
-  --set "image.tag=7.0.2-apache"
+helm upgrade grafana \
+  oci://ghcr.io/grafana-community/helm-charts/grafana \
+  -n monitoring \
+  --set "image.tag=<NEW-TAG>"
 ```
 
-This creates a **new revision**.
+This is the central command of this lesson.
 
-### 3. `--set` overrides chart values
+---
+
+## 12. `helm get values`
 
 ```bash
---set "image.tag=7.0.2-apache"
+helm get values <RELEASE-NAME>
 ```
 
-You don't need to modify the chart's `values.yaml`.
+Shows values associated with a release.
 
-### 4. `helm history` shows the release's revisions
+Use:
 
 ```bash
-helm history wordpress
+helm get values grafana -n monitoring
 ```
 
-### 5. `helm status` shows the current release state
+For all computed values:
 
 ```bash
-helm status wordpress
+helm get values grafana \
+  -n monitoring \
+  --all
 ```
 
-### 6. `helm get values` shows release values
+---
+
+## 13. `helm get manifest`
 
 ```bash
-helm get values wordpress
+helm get manifest <RELEASE-NAME>
 ```
 
-### 7. `helm get manifest` shows the Kubernetes manifests
+Shows the Kubernetes manifests stored for the release.
+
+Example:
 
 ```bash
-helm get manifest wordpress
+helm get manifest grafana -n monitoring
 ```
 
-### The complete picture
+This is extremely useful when debugging:
 
 ```text
-                   Helm Chart
-                       |
-                 values.yaml
-                       |
-              +--------+--------+
-              |                 |
-        chart defaults      --set override
-              |                 |
-              +--------+--------+
-                       |
-                 Final Values
-                       |
-                 Helm Rendering
-                       |
-                 Kubernetes YAML
-                       |
-              Kubernetes API Server
-                       |
-          +------------+------------+
-          |            |            |
-      Deployment     Service       ...
-          |
-        Pod
-          |
-      WordPress
+"What Kubernetes YAML did Helm generate for this release?"
 ```
 
-This is the core idea behind the demo: **`helm upgrade` takes an existing release, renders the chart with the new values, and applies the resulting changes to Kubernetes.**
+---
+
+## 14. `helm get notes`
+
+```bash
+helm get notes <RELEASE-NAME>
+```
+
+Shows the chart's post-install instructions.
+
+For Grafana:
+
+```bash
+helm get notes grafana -n monitoring
+```
+
+This is often useful for discovering how the chart expects you to access the application.
+
+---
+
+## 15. `helm status`
+
+```bash
+helm status <RELEASE-NAME>
+```
+
+Shows the current status/details of a release.
+
+Example:
+
+```bash
+helm status grafana -n monitoring
+```
+
+---
+
+## 16. `helm history`
+
+```bash
+helm history <RELEASE-NAME>
+```
+
+Shows release revisions.
+
+Example:
+
+```bash
+helm history grafana -n monitoring
+```
+
+Think:
+
+> "Show me the timeline of this Helm release."
+
+---
+
+## 17. `helm rollback`
+
+```bash
+helm rollback <RELEASE-NAME> <REVISION>
+```
+
+Restores a previous release state.
+
+Example:
+
+```bash
+helm rollback grafana 2 -n monitoring
+```
+
+Remember:
+
+```text
+Rollback to revision 2
+        ↓
+Creates a new revision
+```
+
+It does not erase the history.
+
+---
+
+## 18. `helm uninstall`
+
+```bash
+helm uninstall <RELEASE-NAME>
+```
+
+Removes a Helm release.
+
+Example:
+
+```bash
+helm uninstall grafana -n monitoring
+```
+
+If you need to retain release history:
+
+```bash
+helm uninstall grafana \
+  -n monitoring \
+  --keep-history
+```
+
+---
+
+# Final Mental Model
+
+Don't memorize Helm as a collection of commands.
+
+Think of it as a lifecycle:
+
+```text
+                 CHART
+                   │
+                   ↓
+            helm show values
+                   │
+                   ↓
+              VALUES
+          ┌────────┴────────┐
+          │                 │
+       -f file            --set
+          │                 │
+          └────────┬────────┘
+                   ↓
+             HELM RENDERING
+                   │
+                   ↓
+           Kubernetes YAML
+                   │
+                   ↓
+             helm install
+                   │
+                   ↓
+             RELEASE v1
+                   │
+                   ↓
+             helm upgrade
+                   │
+                   ↓
+             RELEASE v2
+                   │
+                   ↓
+             helm history
+                   │
+             ┌─────┴─────┐
+             ↓           ↓
+        helm status   helm rollback
+                         │
+                         ↓
+                    RELEASE v3
+```
+
+### The core idea
+
+> **A Helm chart is the package/template. Values configure the chart. Helm renders the chart into Kubernetes manifests and manages those manifests as a versioned release. `helm upgrade` creates a new revision of that release using the new configuration.**
+
+That is the mental model I want you to carry forward into the next Helm topic.
+
+One small but important correction to your requested uninstall section: I'd teach **`helm uninstall` rather than `helm delete`**. `helm delete` is an alias, but `helm uninstall` is the clearer current terminology in the official Helm docs. Also, `helm uninstall` removes release history by default; `--keep-history` changes that behavior. ([helm.sh][1])
+
+For the next `.md` you send, I'll keep this exact standard: **official-doc verification first, then correction, then deeper mental model, then hands-on commands, then a detailed command/concept reference at the end.**
+
+[1]: https://helm.sh/docs/intro/quickstart/?utm_source=chatgpt.com "Quickstart Guide | Helm"
