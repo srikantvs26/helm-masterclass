@@ -24,8 +24,8 @@ helm list -n dev
 helm list --namespace dev
 
 # Helm Status
-helm status dev101 --show-resources -n dev
-helm status dev101 --show-resources --namespace dev
+helm status dev101 -n dev
+helm status dev101 --namespace dev
 
 # List Kubernetes Pods
 kubectl get pods -n dev
@@ -53,8 +53,8 @@ helm list -n dev
 helm list --namespace dev
 
 # Helm Status
-helm status dev101 --show-resources -n dev
-helm status dev101 --show-resources --namespace dev
+helm status dev101  -n dev
+helm status dev101  --namespace dev
 
 # Access Application
 http://localhost:31232
