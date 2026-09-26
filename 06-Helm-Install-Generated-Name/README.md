@@ -19,8 +19,7 @@ We can see the name as "name: mychart1-1689683948" some auto-generated number
 
 # Helm Status
 helm status mychart1-1689683948 
-helm status mychart1-1689683948 --show-resources
-
+helm status mychart1-1689683948
 # Access Application
 http://localhost:31231
 ```
