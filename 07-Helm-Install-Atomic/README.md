@@ -1,7 +1,7 @@
-# Helm Install Atomic Flag
+# Helm Install --rollback-on-failure Flag
 
 ## Step-01: Introduction
-- We will learn to use `--atomic` flag when installing the Helm Release and also understand the importance of using it in a practical way
+- We will learn to use `--rollback-on-failurec` flag when installing the Helm Release and also understand the importance of using it in a practical way
 
 ## Step-02: Install Helm Chart - Release: dev101
 ```t
@@ -39,7 +39,7 @@ helm list
 
 
 ## Step-04: Install Helm Chart - Release: qa101 with --atomic flag
-- when `--atomic` flagis set, the installation process deletes the installation on failure. 
+- when `--rollback-on-failure` flagis set, the installation process deletes the installation on failure. 
 - The `--wait` flag will be set automatically if `--atomic` is used
 - `--wait` will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet are in a ready state before marking the release as successful. It will wait for as long as `--timeout`
 - `--timeout`  time to wait for any individual Kubernetes operation (like Jobs for hooks) (default 5m0s)
