@@ -12,7 +12,7 @@ helm install dev101 stacksimplify/mychart1
 helm list 
 
 # List Kubernetes Resources Deployed as part of this Helm Release
-helm status dev101 --show-resources
+helm status dev101
 
 # Access Application
 http://localhost:31231
@@ -45,11 +45,11 @@ helm list
 - `--timeout`  time to wait for any individual Kubernetes operation (like Jobs for hooks) (default 5m0s)
 ```t
 # Install Helm Chart 
-helm install qa101 stacksimplify/mychart1 --atomic
+helm install qa101 stacksimplify/mychart2 --rollback-on-failure
 
 # List Helm Release
 helm list 
-Observation: We will not see qa101 FAILED release, --atomic flag deleted the release as soon as it is failed with error
+Observation: We will not see qa101 FAILED release, --rollback-on-failure flag deleted the release as soon as it is failed with error
 
 Error: INSTALLATION FAILED: 1 error occurred:
 	* Service "qa101-mychart1" is invalid: spec.ports[0].nodePort: Invalid value: 31231: provided port is already allocated
