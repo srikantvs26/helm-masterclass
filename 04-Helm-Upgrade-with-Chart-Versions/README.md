@@ -45,7 +45,7 @@ helm install myapp101 stacksimplify/mychart2 --version "0.1.0"
 helm list 
 
 # List Kubernetes Resources Deployed as part of this Helm Release
-helm status myapp101 --show-resources
+helm status myapp101
 
 # Access Application
 http://localhost:31232
@@ -64,7 +64,7 @@ helm upgrade myapp101 stacksimplify/mychart2 --version "0.2.0"
 helm list 
 
 # List Kubernetes Resources Deployed as part of this Helm Release
-helm status myapp101 --show-resources
+helm status myapp101
 
 # Access Application
 http://localhost:31232
@@ -82,7 +82,7 @@ helm upgrade myapp101 stacksimplify/mychart2
 helm list 
 
 # List Kubernetes Resources Deployed as part of this Helm Release
-helm status myapp101 --show-resources
+helm status myapp101
 
 # Access Application
 http://localhost:31232
@@ -103,7 +103,7 @@ helm rollback myapp101
 helm list 
 
 # List Kubernetes Resources Deployed as part of this Helm Release
-helm status myapp101 --show-resources
+helm status myapp101
 
 # Access Application
 http://localhost:31232
@@ -124,7 +124,7 @@ helm rollback myapp101 1
 helm list 
 
 # List Kubernetes Resources Deployed as part of this Helm Release
-helm status myapp101 --show-resources
+helm status myapp101
 
 # Access Application
 http://localhost:31232
