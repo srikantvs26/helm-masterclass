@@ -17,6 +17,8 @@
 ### Step-02-01: Review our mychart1 Helm Chart values.yaml
 - [mychart1 values.yaml](https://github.com/stacksimplify/helm-charts/blob/main/mychart1/values.yaml)
 
+helm show values stacksimplify/mychart1
+
 ### Step-02-02: Learn about --dry-run and --debug flags for helm install command
 - Install Helm Chart by overriding NodePort 31231 with 31240
 ```t
@@ -54,8 +56,8 @@ service:
 # Helm Install 
 helm install myapp901 stacksimplify/mychart1 --set service.nodePort=31240 
 
-# helm status --show-resources
-helm status myapp901 --show-resources
+# helm status
+helm status myapp901
 Observation:
 We can see that our NodePort service is running on port 31240
 
@@ -97,7 +99,7 @@ helm upgrade myapp901 stacksimplify/mychart1 -f myvalues.yaml --dry-run --debug
 helm upgrade myapp901 stacksimplify/mychart1 -f myvalues.yaml
 
 # helm status
-helm status myapp901 --show-resources
+helm status myapp901
 Observation: 
 1. Two pods will be running as we changed replicacount to 2
 2. Service Node Port will be 31250 
@@ -108,8 +110,8 @@ Observation:
 1. We should see V2 application because we have used the "image tag as 2.0.0"
 ```
 
-## Step-05: helm get values command
-- **helm get values:** This command downloads a values file for a given release
+## Step-05: helm get values command It shows USER-SUPPLIED VALUES:
+- **helm get values:** This command downloads a values file for a given release, matlab jo jo humne diya tha wo wala bhaisaaab, jo helm ke pass hai uske liye helm show values
 ```t
 # helm get values
 helm get values RELEASE_NAME
@@ -152,6 +154,7 @@ service:
 # helm get manifest
 helm get manifest RELEASE-NAME
 helm get manifest myapp901
+helm get manifest myapp901 > tmp.yaml
 
 # helm get manifest --revision
 helm get manifest RELEASE-NAME --revision int
@@ -178,21 +181,35 @@ helm list
 ```
 
 ## Step-09: Values Hierarchy
-1. Sub chart `values.yaml` can be overriden by parents chart `values.yaml`
-2. Parent charts `values.yaml` can be overriden by user-supplied value file `(-f myvalues.yaml)`
-3. User-supplied value file `(-f myvalues.yaml)` can be overriden by `--set` parameters
+
+```t
+1. Chart's values.yaml
+        ↓
+2. Parent chart values        (if this is a subchart)
+        ↓
+3. -f / --values files
+        ↓
+4. --set
+        ↓
+5. --set-string
+        ↓
+6. --set-file
+        ↓
+7. --set-json
+
+```
 
 ## Step-10: Deleting a default Key by passing null
 - If you need to delete a key from the default values, you may override the value of the key to be null, in which case Helm will remove the key from the overridden values merge.
 ```t
 # Release: myapp901
-helm install myapp901 stacksimplify/mychart1 --atomic
+helm install myapp901 stacksimplify/mychart1 --rollback-on-failure
 helm list
 helm status myapp901 --show-resources
 http://localhost:31231
 
 # Release: myapp902
-helm install myapp902 stacksimplify/mychart1 --atomic
+helm install myapp902 stacksimplify/mychart1 --rollback-on-failure
 helm list
 
 # Option-1: Give desired port other than 31231
@@ -204,7 +221,7 @@ helm install myapp902 stacksimplify/mychart1 --set service.nodePort=null
 
 # Additional Notes for understanding
 1. We will choose option-2 to demonstrate the concept "Deleting a default Key by passing null"
-2. For NodePort Service, if we dont define the "nodePort" argument, it by default assigns a port dynamically from the port range 30000-32767. 
+2. For NodePort Service, if we dont define the "nodePort" argument, it by default assigns a port dynamically from the port range 30000-32767. it show in kubectl get svc
 3. In our case already 31231 is used, other than that port it will allocate someother port when we pass null. 
 4. In short, if we dont want to pass the default values present in values.yaml as-is, we dont need to change the complete chart with a new version, we can just pass null.
 
