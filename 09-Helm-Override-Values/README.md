@@ -17,7 +17,7 @@
 ### Step-02-01: Review our mychart1 Helm Chart values.yaml
 - [mychart1 values.yaml](https://github.com/stacksimplify/helm-charts/blob/main/mychart1/values.yaml)
 
-helm show values stacksimplify/mychart1
+`helm show values stacksimplify/mychart1`
 
 ### Step-02-02: Learn about --dry-run and --debug flags for helm install command
 - Install Helm Chart by overriding NodePort 31231 with 31240
